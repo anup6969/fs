@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handoff – share files directly, no upload</title>
+<meta name="description" content="Send files straight from your browser to another. No server, no account, no cost.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#E8ECF1; --panel:#F6F8FB; --ink:#101C2E; --mute:#586579;
+    --line:#C3CCD8; --blue:#2740F5; --blue-d:#1B2FC4; --ok:#17805A; --err:#B3261E;
+    --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+    --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--body);min-height:100vh}
+  main{max-width:680px;margin:0 auto;padding:28px 20px 80px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:56px}
+  .brand{font:700 22px/1 var(--display);letter-spacing:-.02em}
+  .brand span{color:var(--blue)}
+  h1{font:700 clamp(34px,7vw,52px)/1.03 var(--display);letter-spacing:-.03em;margin:0 0 14px;max-width:14em}
+  .lede{color:var(--mute);margin:0 0 36px;max-width:34em}
+  [hidden]{display:none!important}
+
+  /* the wire: the one memorable element */
+  .wire{display:flex;align-items:center;gap:12px;margin:0 0 28px}
+  .node{font:500 14px/1 var(--body);padding:9px 14px;border:1.5px solid var(--ink);border-radius:999px;background:var(--panel);white-space:nowrap}
+  .track{flex:1;height:2px;position:relative;background:repeating-linear-gradient(90deg,var(--line) 0 6px,transparent 6px 12px)}
+  .track i{position:absolute;left:0;top:-2px;height:6px;width:0;background:var(--blue);border-radius:3px;transition:width .2s linear}
+  .wire.live .track{background:var(--line)}
+  .wire.live .node:last-child{border-color:var(--blue);color:var(--blue-d)}
+  .wire.busy .track i::after{content:"";position:absolute;right:-5px;top:-2px;width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(39,64,245,.2)}
+
+  .drop{display:block;border:2px dashed var(--ink);border-radius:18px;padding:44px 24px;text-align:center;cursor:pointer;background:var(--panel);transition:background .15s,border-color .15s}
+  .drop:hover,.drop.over{background:#fff;border-color:var(--blue)}
+  .drop:focus-within{outline:3px solid var(--blue);outline-offset:3px}
+  .drop b{display:block;font:700 22px/1.2 var(--display);margin-bottom:4px}
+  .drop small{color:var(--mute);font-size:15px}
+  .drop input{position:absolute;opacity:0;width:1px;height:1px}
+  .drop.compact{padding:18px}
+  .drop.compact b{font-size:17px;margin:0}
+  .drop.compact small{display:none}
+
+  h2{font:700 20px/1.2 var(--display);margin:40px 0 12px;letter-spacing:-.01em}
+  ul.rows{list-style:none;margin:0;padding:0;border-top:1.5px solid var(--ink)}
+  ul.rows li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .rname{flex:1 1 200px;min-width:0;overflow-wrap:anywhere;font-weight:500}
+  .rmeta{color:var(--mute);font-size:14px;font-variant-numeric:tabular-nums}
+  .bar{flex:1 0 100%;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .15s linear}
+  .done .bar i{background:var(--ok)}
+
+  button,.btn{font:500 15px/1 var(--body);border:0;border-radius:10px;padding:12px 18px;background:var(--blue);color:#fff;cursor:pointer;min-height:44px}
+  button:hover{background:var(--blue-d)}
+  button:disabled{background:var(--line);color:var(--mute);cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--ink)}
+  button.ghost:hover{background:var(--ink);color:#fff}
+  button.x{background:transparent;color:var(--mute);padding:8px 10px;min-height:36px}
+  button.x:hover{background:transparent;color:var(--err)}
+  button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+  .share{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .linkcol{flex:1 1 300px;min-width:0}
+  .linkrow{display:flex;gap:8px}
+  .linkrow input{flex:1;min-width:0;font:15px var(--body);padding:12px 14px;border:1.5px solid var(--ink);border-radius:10px;background:#fff;color:var(--ink)}
+  #qr{padding:8px;background:#fff;border-radius:10px;border:1.5px solid var(--line);line-height:0}
+  .note{color:var(--mute);font-size:14px;margin:10px 0 0}
+  .status{font-size:15px;margin:0 0 18px;color:var(--mute)}
+  .status.ok{color:var(--ok)} .status.err{color:var(--err)}
+  .warn{background:#FFF3D6;border:1px solid #E5C77A;border-radius:10px;padding:10px 14px;font-size:14px;margin:0 0 18px}
+  footer{margin-top:64px;color:var(--mute);font-size:14px;max-width:38em}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">hand<span>off</span></div>
+  </header>
+
+  <!-- ============ SENDER ============ -->
+  <section id="sender">
+    <h1>Send files straight to another device.</h1>
+    <p class="lede">Choose files and share the link. They move directly from your browser to theirs. Nothing is uploaded, and no account is needed.</p>
+
+    <div class="wire" id="wireS"><span class="node">You</span><div class="track"><i></i></div><span class="node" id="peerNodeS">Nobody yet</span></div>
+
+    <p class="warn" id="fileWarn" hidden>This page is open from a file on your computer, so the link below only works after you host it. See the hosting steps in the chat.</p>
+
+    <label class="drop" id="drop" for="picker">
+      <b id="dropTitle">Drop files here or tap to choose</b>
+      <small>Any type, any number of files</small>
+      <input type="file" id="picker" multiple>
+    </label>
+
+    <div id="shareBox" hidden>
+      <h2>Share this link</h2>
+      <div class="share">
+        <div class="linkcol">
+          <div class="linkrow">
+            <input id="linkField" readonly aria-label="Share link">
+            <button id="copyBtn" type="button">Copy link</button>
+          </div>
+          <p class="note" id="shareNote">Keep this tab open. The files stay on your device and are sent only while it is open.</p>
+        </div>
+        <div id="qr" hidden></div>
+      </div>
+      <p class="status" id="sStatus" style="margin-top:18px">Setting up…</p>
+    </div>
+
+    <div id="fileBox" hidden>
+      <h2>Files being shared</h2>
+      <ul class="rows" id="fileList"></ul>
+    </div>
+
+    <div id="recvBox" hidden>
+      <h2>People connected</h2>
+      <ul class="rows" id="recvList"></ul>
+    </div>
+  </section>
+
+  <!-- ============ RECEIVER ============ -->
+  <section id="receiver" hidden>
+    <h1>Someone shared files with you.</h1>
+    <p class="lede">Your browser connects directly to theirs. The download starts when you choose a file.</p>
+    <div class="wire" id="wireR"><span class="node" id="peerNodeR">Sender</span><div class="track"><i></i></div><span class="node">You</span></div>
+    <p class="status" id="rStatus">Connecting to the sender…</p>
+    <ul class="rows" id="dlList" hidden></ul>
+  </section>
+
+  <footer>
+    Handoff sends files browser to browser over an encrypted WebRTC connection. A free public server only helps the two devices find each other; it never sees your files.
+  </footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const CHUNK = 64 * 1024;
+  const HIGH_WATER = 1024 * 1024;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const rand = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+  const fmt = n => {
+    if (n < 1024) return n + ' B';
+    const u = ['KB','MB','GB','TB']; let i = -1;
+    do { n /= 1024; i++; } while (n >= 1024 && i < 3);
+    return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i];
+  };
+  const setFill = (wire, pct) => { wire.querySelector('.track i').style.width = pct + '%'; };
+  const wireState = (wire, live, busy) => { wire.classList.toggle('live', !!live); wire.classList.toggle('busy', !!busy); };
+
+  if (typeof Peer === 'undefined') {
+    document.body.insertAdjacentHTML('afterbegin', '<p class="warn" style="margin:20px">Could not load the connection library. Check your internet connection and reload.</p>');
+    return;
+  }
+
+  const targetId = location.hash.slice(1).trim();
+  if (targetId) startReceiver(targetId); else startSender();
+
+  /* ================= SENDER ================= */
+  function startSender() {
+    const files = [];            // { id, file }
+    const conns = new Map();     // conn -> { li, status }
+    let peer = null, linkShown = false, nextFileId = 1, guestN = 0;
+
+    if (location.protocol === 'file:') $('#fileWarn').hidden = false;
+
+    const drop = $('#drop'), picker = $('#picker');
+    picker.addEventListener('change', () => { addFiles(picker.files); picker.value = ''; });
+    ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', ev => addFiles(ev.dataTransfer.files));
+
+    $('#copyBtn').addEventListener('click', async () => {
+      const f = $('#linkField');
+      try { await navigator.clipboard.writeText(f.value); } catch { f.select(); document.execCommand('copy'); }
+      $('#copyBtn').textContent = 'Copied';
+      setTimeout(() => $('#copyBtn').textContent = 'Copy link', 1500);
+    });
+
+    window.addEventListener('beforeunload', e => {
+      if (files.length && conns.size) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    function addFiles(list) {
+      for (const f of list) files.push({ id: nextFileId++, file: f });
+      renderFiles();
+      broadcastList();
+      if (!peer) makePeer();
+    }
+
+    function removeFile(id) {
+      const i = files.findIndex(x => x.id === id);
+      if (i > -1) files.splice(i, 1);
+      renderFiles();
+      broadcastList();
+    }
+
+    function renderFiles() {
+      const ul = $('#fileList');
+      ul.innerHTML = '';
+      for (const { id, file } of files) {
+        const li = document.createElement('li');
+        const n = document.createElement('span'); n.className = 'rname'; n.textContent = file.name;
+        const m = document.createElement('span'); m.className = 'rmeta'; m.textContent = fmt(file.size);
+        const x = document.createElement('button'); x.className = 'x'; x.type = 'button';
+        x.textContent = 'Remove'; x.setAttribute('aria-label', 'Remove ' + file.name);
+        x.onclick = () => removeFile(id);
+        li.append(n, m, x); ul.append(li);
+      }
+      $('#fileBox').hidden = files.length === 0;
+      $('#dropTitle').textContent = files.length ? 'Add more files' : 'Drop files here or tap to choose';
+      drop.classList.toggle('compact', files.length > 0);
+    }
+
+    const meta = () => files.map(({ id, file }) => ({ id, name: file.name, size: file.size, type: file.type }));
+    const broadcastList = () => { for (const c of conns.keys()) if (c.open) c.send({ t: 'list', files: meta() }); };
+
+    function makePeer() {
+      const id = 'hf-' + rand(8);
+      peer = new Peer(id);
+      peer.on('open', () => {
+        if (linkShown) return;
+        linkShown = true;
+        const url = location.href.split('#')[0] + '#' + id;
+        $('#linkField').value = url;
+        $('#shareBox').hidden = false;
+        setStatus('Waiting for someone to open the link.');
+        if (typeof QRCode !== 'undefined') {
+          const q = $('#qr'); q.hidden = false; q.innerHTML = '';
+          new QRCode(q, { text: url, width: 124, height: 124, colorDark: '#101C2E', colorLight: '#ffffff' });
+        }
+      });
+      peer.on('connection', onGuest);
+      peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); });
+      peer.on('error', err => {
+        if (err.type === 'unavailable-id') { peer.destroy(); peer = null; makePeer(); }
+        else setStatus('Connection problem: ' + err.type.replace(/-/g, ' ') + '. Reload the page to try again.', 'err');
+      });
+    }
+
+    function setStatus(msg, cls) {
+      const s = $('#sStatus'); s.textContent = msg; s.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    function onGuest(conn) {
+      const label = 'Person ' + (++guestN);
+      const li = document.createElement('li');
+      const n = document.createElement('span'); n.className = 'rname'; n.textContent = label;
+      const m = document.createElement('span'); m.className = 'rmeta'; m.textContent = 'Connecting…';
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.hidden = true; bar.innerHTML = '<i></i>';
+      li.append(n, m, bar);
+      $('#recvList').append(li); $('#recvBox').hidden = false;
+      conns.set(conn, { li, m, bar });
+      refreshPeers();
+
+      conn.on('open', () => {
+        m.textContent = 'Connected';
+        conn.send({ t: 'list', files: meta() });
+        refreshPeers();
+      });
+      conn.on('data', msg => {
+        if (msg && msg.t === 'get') {
+          const entry = files.find(f => f.id === msg.id);
+          if (entry) sendFile(conn, entry, conns.get(conn));
+        }
+      });
+      const gone = () => {
+        const c = conns.get(conn);
+        if (c) { c.m.textContent = 'Left'; setTimeout(() => c.li.remove(), 4000); }
+        conns.delete(conn);
+        if (!conns.size) $('#recvBox').hidden = true;
+        refreshPeers();
+      };
+      conn.on('close', gone);
+      conn.on('error', gone);
+    }
+
+    function refreshPeers() {
+      const open = [...conns.keys()].filter(c => c.open).length;
+      $('#peerNodeS').textContent = open ? (open === 1 ? '1 person' : open + ' people') : 'Nobody yet';
+      wireState($('#wireS'), open > 0, false);
+      if (linkShown) setStatus(open ? 'Connected. Keep this tab open while they download.' : 'Waiting for someone to open the link.', open ? 'ok' : '');
+    }
+
+    async function sendFile(conn, entry, ui) {
+      const f = entry.file;
+      let off = 0;
+      const wire = $('#wireS');
+      ui.bar.hidden = false;
+      conn.send({ t: 'start', id: entry.id, name: f.name, size: f.size });
+      wireState(wire, true, true);
+      try {
+        while (off < f.size) {
+          if (!conn.open) return;
+          const buf = await f.slice(off, off + CHUNK).arrayBuffer();
+          while (conn.open && conn.dataChannel && conn.dataChannel.bufferedAmount > HIGH_WATER) await sleep(15);
+          if (!conn.open) return;
+          conn.send(buf);
+          off += buf.byteLength;
+          const pct = Math.round(off / f.size * 100);
+          ui.bar.firstChild.style.width = pct + '%';
+          ui.m.textContent = 'Sending ' + f.name + ' · ' + pct + '%';
+          setFill(wire, pct);
+        }
+        conn.send({ t: 'end', id: entry.id });
+        ui.m.textContent = 'Sent ' + f.name;
+        ui.li.classList.add('done');
+      } finally {
+        setTimeout(() => { setFill(wire, 0); wireState(wire, [...conns.keys()].some(c => c.open), false); }, 800);
+      }
+    }
+  }
+
+  /* ================= RECEIVER ================= */
+  function startReceiver(id) {
+    $('#sender').hidden = true;
+    $('#receiver').hidden = false;
+    const status = $('#rStatus'), list = $('#dlList'), wire = $('#wireR');
+    const setStatus = (m, cls) => { status.textContent = m; status.className = 'status' + (cls ? ' ' + cls : ''); };
+    let conn = null, cur = null, busy = false;
+
+    const peer = new Peer();
+    const timeout = setTimeout(() => {
+      if (!conn || !conn.open) setStatus('Could not reach the sender. Ask them to keep their tab open, then reload this page.', 'err');
+    }, 20000);
+
+    peer.on('open', () => {
+      conn = peer.connect(id, { reliable: true });
+      conn.on('open', () => { clearTimeout(timeout); wireState(wire, true, false); setStatus('Connected. Choose a file to download.', 'ok'); });
+      conn.on('data', onData);
+      conn.on('close', () => {
+        wireState(wire, false, false);
+        setStatus('The sender went offline. Ask them to keep their tab open, then reload this page.', 'err');
+        list.querySelectorAll('button').forEach(b => b.disabled = true);
+      });
+      conn.on('error', () => setStatus('Connection error. Reload the page to try again.', 'err'));
+    });
+    peer.on('error', err => {
+      clearTimeout(timeout);
+      setStatus(err.type === 'peer-unavailable'
+        ? 'This link is no longer active. Ask the sender to keep their tab open, or send a new link.'
+        : 'Connection problem: ' + err.type.replace(/-/g, ' ') + '. Reload the page to try again.', 'err');
+    });
+
+    function renderList(files) {
+      list.hidden = false;
+      list.innerHTML = '';
+      for (const f of files) {
+        const li = document.createElement('li'); li.dataset.id = f.id;
+        const n = document.createElement('span'); n.className = 'rname'; n.textContent = f.name;
+        const m = document.createElement('span'); m.className = 'rmeta'; m.textContent = fmt(f.size);
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Download'; b.disabled = busy;
+        b.onclick = () => download(f, li, m, b);
+        const bar = document.createElement('div'); bar.className = 'bar'; bar.hidden = true; bar.innerHTML = '<i></i>';
+        li.append(n, m, b, bar); list.append(li);
+      }
+      if (!files.length) { list.hidden = true; setStatus('The sender has no files shared right now.'); }
+    }
+
+    async function download(f, li, m, btn) {
+      if (busy) return;
+      let writer = null;
+      if (window.showSaveFilePicker) {           // streams straight to disk (Chrome, Edge)
+        try {
+          const h = await showSaveFilePicker({ suggestedName: f.name });
+          writer = await h.createWritable();
+        } catch (e) { if (e.name === 'AbortError') return; writer = null; }
+      }
+      busy = true;
+      list.querySelectorAll('button').forEach(b => b.disabled = true);
+      cur = { id: f.id, name: f.name, type: f.type, size: f.size, got: 0, parts: [], writer, chain: Promise.resolve(), li, m, bar: li.querySelector('.bar') };
+      cur.bar.hidden = false;
+      wireState(wire, true, true);
+      conn.send({ t: 'get', id: f.id });
+    }
+
+    function onData(d) {
+      if (d instanceof ArrayBuffer || ArrayBuffer.isView(d)) {
+        if (!cur) return;
+        const c = cur;
+        c.got += d.byteLength;
+        if (c.writer) c.chain = c.chain.then(() => c.writer.write(d)); else c.parts.push(d);
+        const pct = c.size ? Math.round(c.got / c.size * 100) : 100;
+        c.bar.firstChild.style.width = pct + '%';
+        c.m.textContent = fmt(c.got) + ' of ' + fmt(c.size);
+        setFill(wire, pct);
+        return;
+      }
+      if (!d || !d.t) return;
+      if (d.t === 'list') renderList(d.files);
+      else if (d.t === 'end' && cur && cur.id === d.id) finish();
+    }
+
+    async function finish() {
+      const c = cur; cur = null;
+      try {
+        if (c.writer) { await c.chain; await c.writer.close(); }
+        else {
+          const url = URL.createObjectURL(new Blob(c.parts, { type: c.type || 'application/octet-stream' }));
+          const a = document.createElement('a'); a.href = url; a.download = c.name;
+          document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+        c.m.textContent = 'Downloaded · ' + fmt(c.size);
+        c.li.classList.add('done');
+        setStatus('Downloaded ' + c.name + '.', 'ok');
+      } catch {
+        setStatus('Could not save ' + c.name + '. Try downloading it again.', 'err');
+      }
+      busy = false;
+      list.querySelectorAll('button').forEach(b => b.disabled = false);
+      setTimeout(() => { setFill(wire, 0); wireState(wire, conn && conn.open, false); }, 800);
+    }
+  }
+})();
+</script>
+</body>
+</html>
